@@ -3,7 +3,11 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <string>
 #include <iostream>
+#include <stdexcept> // Include for try-block statement
+#include <climits>   // Include for INT_MAX
+using namespace std;
 
 
 sem_t empty_milk;
@@ -126,8 +130,74 @@ void *cheeseburger_producer(void* arg)
     }
 }
 
+/********************************************************************
+*** FUNCTION removeWhiteSpace                                     ***
+*********************************************************************
+*** DESCRIPTION : Removes any character that counts as white      ***
+*** space.                                                        ***
+*********************************************************************
+*** INPUT ARGS  :                                                 ***
+*** OUTPUT ARGS :                                                 ***
+*** IN/OUT ARGS : str                                             ***
+*** RETURN      : string str                                      ***
+********************************************************************/
 
-int main(int argc, char** argv)
+string removeWhiteSpace(string str)
+{
+    // remove all of the spaces
+    str.erase(remove(str.begin(), str.end(), ' '), str.end());
+     // remove any carriage returns
+    str.erase(remove(str.begin(), str.end(), '\r'), str.end());
+    // remove any tabs
+    str.erase(remove(str.begin(), str.end(), '\t'), str.end());
+    // remove any newline characters
+    str.erase(remove(str.begin(), str.end(), '\n'), str.end());
+    // remove any vertical tabs
+    str.erase(remove(str.begin(), str.end(), '\v'), str.end());
+    // remove any form feed characters
+    str.erase(remove(str.begin(), str.end(), '\f'), str.end());
+    return str;
+}
+
+/********************************************************************
+*** FUNCTION intConvert                                         ***
+*********************************************************************
+*** DESCRIPTION : Translate the value string to an integer.       ***
+*********************************************************************
+*** INPUT ARGS  : str                                        ***
+*** OUTPUT ARGS : int value                                       ***
+*** IN/OUT ARGS :                                                 ***
+*** RETURN      : int value or int representing translation error ***
+********************************************************************/
+
+int intConvert(string str)
+{
+    // attempt to convert the value string to an int
+    try
+    {
+        int i = stoi(str);
+    }
+    // if an exception is found, display error message
+    catch (invalid_argument)
+    {
+       cout << "Please enter a whole number greater than 0." << endl;
+        return INT_MAX;
+    }
+    catch (out_of_range)
+    {
+        cout << "Out of Range error while converting " << str << " to integer." << endl;
+        return INT_MAX;
+    }
+    catch (exception)
+    {
+        cout << "Exception error while converting " << str << " to integer." << endl;
+        return INT_MAX;
+    }
+    // convert the string to an int
+    return stoi(str);
+}
+
+int main()
 {
     sem_init(&empty_milk, 0, mMAX);
     sem_init(&empty_cheese, 0, chMAX);
@@ -136,39 +206,64 @@ int main(int argc, char** argv)
     sem_init(&full_milk, 0, 0);
     sem_init(&full_cheese, 0, 0);
 
-    
-
-    int total_cheeseburgers = argv[1];
-    int total_cheese = 2 * total_cheeseburgers;
-    int total_milk = 3 * total_cheese;
-
-    thread_args[5] = {{1, total_milk},{2, total_milk},{3, total_milk},{4, total_cheese},{5, total_cheese}}
-
     pthread_t t_m1, t_m2, t_m3;
     pthread_t t_ch1, t_ch2;
     pthread_t t_chb;
 
-    pthread_create(&t_m1, NULL, milk_producer, (void*)&thread_args[1]);
-    pthread_create(&t_m2, NULL, milk_producer, (void*)&thread_args[2]);
-    pthread_create(&t_m3, NULL, milk_producer, (void*)&thread_args[3]);
-    pthread_create(&t_ch1, NULL, cheese_producer, (void*)&thread_args[4]);
-    pthread_create(&t_ch2, NULL, cheese_producer, (void*)&thread_args[5]);
-    pthread_create(&t_chb, NULL, cheeseburger_producer, (void*)&total_cheeseburgers);
+    string cheeseburgers_string;
+    int total_cheeseburgers;
 
-    pthread_join(t_m1, NULL);
-    pthread_join(t_m2, NULL);
-    pthread_join(t_m3, NULL);
-    pthread_join(t_ch1, NULL);
-    pthread_join(t_ch2, NULL);
-    pthread_join(t_chb, NULL);
+    while(true)
+    {
+        cout << "How many cheeseburgers do you want to produce? Enter 'exit' to quit program." << endl;
+        cin >> cheeseburgers_string;
+        cheeseburgers_string = removeWhiteSpace(cheeseburgers_string);
+        if (cheeseburgers_string == "exit")
+        {
+            break;
+        }
+        else if ((total_cheeseburgers = intConvert(cheeseburgers_string)) != INT_MAX)
+        {
+            if(total_cheeseburgers > 0)
+            {
+                int total_cheese = 2 * total_cheeseburgers;
+                int total_milk = 3 * total_cheese;
 
-    sem_destroy(&empty_milk);
-    sem_destroy(&empty_cheese);
-    sem_destroy(&mutex_milk);
-    sem_destroy(&mutex_cheese);
-    sem_destroy(&full_milk);
-    sem_destroy(&full_cheese;
+                thread_args[5] = {{1, total_milk},{2, total_milk},{3, total_milk},{4, total_cheese},{5, total_cheese}}
 
+            
+
+                pthread_create(&t_m1, NULL, milk_producer, (void*)&thread_args[1]);
+                pthread_create(&t_m2, NULL, milk_producer, (void*)&thread_args[2]);
+                pthread_create(&t_m3, NULL, milk_producer, (void*)&thread_args[3]);
+                pthread_create(&t_ch1, NULL, cheese_producer, (void*)&thread_args[4]);
+                pthread_create(&t_ch2, NULL, cheese_producer, (void*)&thread_args[5]);
+                pthread_create(&t_chb, NULL, cheeseburger_producer, (void*)&total_cheeseburgers);
+
+                pthread_join(t_m1, NULL);
+                pthread_join(t_m2, NULL);
+                pthread_join(t_m3, NULL);
+                pthread_join(t_ch1, NULL);
+                pthread_join(t_ch2, NULL);
+                pthread_join(t_chb, NULL);
+
+                sem_destroy(&empty_milk);
+                sem_destroy(&empty_cheese);
+                sem_destroy(&mutex_milk);
+                sem_destroy(&mutex_cheese);
+                sem_destroy(&full_milk);
+                sem_destroy(&full_cheese;
+
+            }
+            else
+            {
+                cout << "Please enter a whole number greater than 0." << endl;
+            }
+        }
+    }
+
+    
+    
     return 0;
     
 }
