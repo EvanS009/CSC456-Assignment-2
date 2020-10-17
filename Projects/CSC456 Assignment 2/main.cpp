@@ -22,8 +22,35 @@ int milk_read_idk = 0;
 int cheese_write_idx = 0;
 int cheese_read_idx = 0;
 
+int total_cheeseburgers = argv[1];
+int total_cheese = 2 * total_cheeseburgers;
+int total_milk = 3 * total_cheese;
 
-int total_cheeseburgers = 0;
+
+int milk = 0, cheese = 0, cheeseburgers = 0;
+
+void *milk_producer(void* pid)
+{
+    
+    while (milk < total_milk)
+    {
+        sem_wait(&empty_milk);
+        sem_wait(&mutex_milk);
+        // critical section
+        buffer[milk_write_idx] = *(int*)pid;
+        milk++;
+        milk_write_idx++;
+        if (milk_write_idx == mMAX)
+        {
+            milk_write_idx %= mMAX;
+        }
+        sem_post(&mutex_milk);
+        sem_post(&full_milk);
+    }
+}
+
+
+
 
 int main(int argc, char** argv)
 {
@@ -36,6 +63,7 @@ int main(int argc, char** argv)
 
     int pid[5] = {1, 2, 3, 4, 5};
 
+    
     pthread_t t_m1, t_m2, t_m3;
     pthread_t t_ch1, t_ch2;
     pthread_t t_chb;
