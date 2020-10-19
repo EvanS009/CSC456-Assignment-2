@@ -7,6 +7,8 @@
 #include <iostream>
 #include <stdexcept> // Include for try-block statement
 #include <climits>   // Include for INT_MAX
+#include <algorithm>
+#include <array>
 using namespace std;
 
 
@@ -39,13 +41,14 @@ struct thread_args
 
 void *milk_producer(void* args)
 {
-    
-    while (milk < *(int*)args->total)
+    thread_args *margs = new thread_args;
+    *margs = *(thread_args *)args;
+    while (milk < margs->total)
     {
         sem_wait(&empty_milk);
         sem_wait(&mutex_milk);
         // critical section
-        buffer_milk[milk_write_idx] = *(int*)args->pid;
+        buffer_milk[milk_write_idx] = margs->pid;
         milk++;
         milk_write_idx++;
         if (milk_write_idx == mMAX)
@@ -59,14 +62,17 @@ void *milk_producer(void* args)
         }
         
     }
+    delete margs;
 }
 
 void *cheese_producer(void* args)
 {
-    int[3] mid = {0};
+    int mid[3] = {0};
     int cheese_id;
+    thread_args *chargs = new thread_args;
+    *chargs = *(thread_args *)args;
 
-    while (cheese < *(int*)args->total)
+    while (cheese < chargs->total)
     {
 
         sem_wait(&full_milk);
@@ -80,10 +86,11 @@ void *cheese_producer(void* args)
                 milk_read_idx %= mMAX;
             }
         }
-        sem_wait(&mutex_milk);
-        sem_wait(&empty_milk);
+        sem_post(&mutex_milk);
+        for (int i = 0; i < 3; i++)
+            sem_post(&empty_milk);
 
-        cheese_id = mid[0]*1000 + mid[1]*100 + mid[2]*10 + *(int*)args->pid;
+        cheese_id = mid[0]*1000 + mid[1]*100 + mid[2]*10 + chargs->pid;
 
         sem_wait(&empty_cheese);
         sem_wait(&mutex_cheese);
@@ -102,11 +109,12 @@ void *cheese_producer(void* args)
         }
         
     }
+    delete chargs;
 }
 
 void *cheeseburger_producer(void* arg)
 {
-    int[2] chid = {0};
+    int chid[2] = {0};
     int burger_id;
 
     while (cheeseburgers < *(int*)arg)
@@ -123,10 +131,13 @@ void *cheeseburger_producer(void* arg)
                 cheese_read_idx %= chMAX;
             }
         }
-
+        sem_post(&mutex_cheese);
+        for (int i = 0; i < 2; i++)
+            sem_post(&empty_cheese);
         burger_id = chid[0]*10000 + chid[1];
         cheeseburgers++;
         cout << burger_id << endl;
+
     }
 }
 
@@ -229,15 +240,15 @@ int main()
                 int total_cheese = 2 * total_cheeseburgers;
                 int total_milk = 3 * total_cheese;
 
-                thread_args[5] = {{1, total_milk},{2, total_milk},{3, total_milk},{4, total_cheese},{5, total_cheese}}
+                thread_args args[5] = {{1, total_milk},{2, total_milk},{3, total_milk},{4, total_cheese},{5, total_cheese}};
 
             
 
-                pthread_create(&t_m1, NULL, milk_producer, (void*)&thread_args[1]);
-                pthread_create(&t_m2, NULL, milk_producer, (void*)&thread_args[2]);
-                pthread_create(&t_m3, NULL, milk_producer, (void*)&thread_args[3]);
-                pthread_create(&t_ch1, NULL, cheese_producer, (void*)&thread_args[4]);
-                pthread_create(&t_ch2, NULL, cheese_producer, (void*)&thread_args[5]);
+                pthread_create(&t_m1, NULL, milk_producer, (void*)&args[1]);
+                pthread_create(&t_m2, NULL, milk_producer, (void*)&args[2]);
+                pthread_create(&t_m3, NULL, milk_producer, (void*)&args[3]);
+                pthread_create(&t_ch1, NULL, cheese_producer, (void*)&args[4]);
+                pthread_create(&t_ch2, NULL, cheese_producer, (void*)&args[5]);
                 pthread_create(&t_chb, NULL, cheeseburger_producer, (void*)&total_cheeseburgers);
 
                 pthread_join(t_m1, NULL);
@@ -252,8 +263,13 @@ int main()
                 sem_destroy(&mutex_milk);
                 sem_destroy(&mutex_cheese);
                 sem_destroy(&full_milk);
-                sem_destroy(&full_cheese;
+                sem_destroy(&full_cheese);
 
+                fill (buffer_milk, buffer_milk + mMAX, 0);
+                fill (buffer_cheese, buffer_cheese + chMAX, 0);
+                
+                milk_write_idx = 0, milk_read_idx = 0, cheese_write_idx = 0, cheese_read_idx = 0;
+                milk = 0, cheese = 0, cheeseburgers = 0;
             }
             else
             {
