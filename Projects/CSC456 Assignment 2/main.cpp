@@ -55,54 +55,40 @@ struct thread_args
 void *milk_producer(void* args)
 {
     // cast arguments struct to struct pointer
-    thread_args *margs = new thread_args;
-    *margs = *(thread_args *)args;
+    thread_args *milk_args = new thread_args;
+    *milk_args = *(thread_args *)args;
 
     // loop until the milk count meets the total milk needed
-    while (milk < margs->total)
+    for(int i = 0; i < milk_args->total; i++)
     {
         // if there isn't an available space in the milk buffer to write to, wait
         sem_wait(&empty_milk);
         // if another thread is accessing the milk buffer, wait
         sem_wait(&mutex_milk);
         //critical section
-        //check to see if the milk counter is still below the total needed
-        if (milk < margs->total)
+        // if so, assign the thread's producer id to the milk buffer at the writing index
+        // thereby producing milk to that spot
+        buffer_milk[milk_write_idx] = milk_args->pid;
+        // increment the milk counter
+        milk++;
+        // increment the milk buffer writing index
+        milk_write_idx++;
+        // if the index goes beyond the bounds of the array, loop it back to the beginning
+        if (milk_write_idx == mMAX)
         {
-            // if so, assign the thread's producer id to the milk buffer at the writing index
-            // thereby producing milk to that spot
-            buffer_milk[milk_write_idx] = margs->pid;
-            // increment the milk counter
-            milk++;
-            // increment the milk buffer writing index
-            milk_write_idx++;
-            // if the index goes beyond the bounds of the array, loop it back to the beginning
-            if (milk_write_idx == mMAX)
-            {
-                milk_write_idx %= mMAX;
-            }
-            // unlock the milk mutex semaphore
-            sem_post(&mutex_milk);
-            // if there are enough milk bottles to produce cheese, signal the full milk semaphore
-            if (milk % 3 == 0)
-            {
-                sem_post(&full_milk);
-            }
+            milk_write_idx %= mMAX;
         }
-        // if the milk counter reached the total needed while the thread was waiting on the mutex lock
-        // reset the mutex and empty milk semaphores
-        else
+        // unlock the milk mutex semaphore
+        sem_post(&mutex_milk);
+        // if there are enough milk bottles to produce cheese, signal the full milk semaphore
+        if (milk % 3 == 0)
         {
-            sem_post(&mutex_milk);
-            sem_post(&empty_milk);
-            // signal the full milk semaphore to prevent the cheese producer thread from blocking
-            //sem_post(&full_milk);
-        }
-        
+            sem_post(&full_milk);
+        }      
        
     }
     // delete struct pointer
-    delete margs;
+    delete milk_args;
 }
 
 /********************************************************************
@@ -123,90 +109,67 @@ void *cheese_producer(void* args)
     int cheese_id; // the cheese producer id to be sent to the cheese buffer
 
     // cast arguments struct to struct pointer
-    thread_args *chargs = new thread_args; 
-    *chargs = *(thread_args *)args;
+    thread_args *cheese_args = new thread_args; 
+    *cheese_args = *(thread_args *)args;
 
     // loop through program if the amount of cheese produced is less than what is needed
-    while (cheese < chargs->total)
+    for(int j = 0; j < cheese_args->total; j++)
     {
         // if there aren't enough milk bottles in the milk buffer to read, wait
         sem_wait(&full_milk);
         // if another thread is accessing the milk buffer, wait
         sem_wait(&mutex_milk);
-        // if the cheese count didn't reach the total needed while the thread was waiting for the mutex lock
-        if (cheese < chargs->total)
+        // critical section
+        // take the next three entries in the milk buffer
+        for (int i = 0; i < 3; i++)
         {
-            // critical section
-            // take the next three entries in the milk buffer
-            for (int i = 0; i < 3; i++)
+            // add the producer id's from each milk buffer entry to the milk id array
+            mid[i] = buffer_milk[milk_read_idx];
+            // increment the milk read index
+            milk_read_idx++;
+            // if the milk read index exceeds the bounds of the array, loop back to the beginning
+            if (milk_read_idx == mMAX)
             {
-                // add the producer id's from each milk buffer entry to the milk id array
-                mid[i] = buffer_milk[milk_read_idx];
-                // increment the milk read index
-                milk_read_idx++;
-                // if the milk read index exceeds the bounds of the array, loop back to the beginning
-                if (milk_read_idx == mMAX)
-                {
-                    milk_read_idx %= mMAX;
-                }
+                milk_read_idx %= mMAX;
             }
-            // return the milk mutex lock
-            sem_post(&mutex_milk);
-            // signal the empty milk semaphor 3 times to account for the 3 milk bottles consumed
-            for (int i = 0; i < 3; i++)
-                sem_post(&empty_milk);
-
-            // assemble cheese id from milk id array and the current thread's producer id
-            cheese_id = mid[0]*1000 + mid[1]*100 + mid[2]*10 + chargs->pid;
         }
+        // return the milk mutex lock
+        sem_post(&mutex_milk);
+        // signal the empty milk semaphor 3 times to account for the 3 milk bottles consumed
+        for (int i = 0; i < 3; i++)
+            sem_post(&empty_milk);
+
+        // assemble cheese id from milk id array and the current thread's producer id
+        cheese_id = mid[0]*1000 + mid[1]*100 + mid[2]*10 + cheese_args->pid;
         // if the cheese count hit the total while the thread was waiting for the mutex lock
         // reset the mutex and full milk semaphores
-        else
-        {
-            sem_post(&mutex_milk);
-            sem_post(&full_milk);
-        }
         
         // if there isn't an available space in the cheese buffer to write to, wait
         sem_wait(&empty_cheese);
         // if another thread is accessing the cheese buffer, wait
         sem_wait(&mutex_cheese);
-
-        if (cheese < chargs->total)
+        // critical section
+        // write the cheese id to the cheese buffer at the writing index
+        buffer_cheese[cheese_write_idx] = cheese_id;
+        // increment the cheese counter
+        cheese++;
+        // increment the cheese buffer writing index
+        cheese_write_idx++;
+        // if the writing index exceeds the bounds of the array, loop back to the beginning
+        if (cheese_write_idx == chMAX)
         {
-            // critical section
-            // write the cheese id to the cheese buffer at the writing index
-            buffer_cheese[cheese_write_idx] = cheese_id;
-            // increment the cheese counter
-            cheese++;
-            // increment the cheese buffer writing index
-            cheese_write_idx++;
-            // if the writing index exceeds the bounds of the array, loop back to the beginning
-            if (cheese_write_idx == chMAX)
-            {
-                cheese_write_idx %= chMAX;
-            }
-            // release the cheese mutex lock
-            sem_post(&mutex_cheese);
-            // if there is enough cheese to make a cheeseburger, signal the full cheese semaphore
-            if (cheese % 2 == 0)
-            {
-                sem_post(&full_cheese);
-            }
+            cheese_write_idx %= chMAX;
         }
-        // if the cheese count reached the total needed while the thread was waiting on the mutex lock
-        else
+        // release the cheese mutex lock
+        sem_post(&mutex_cheese);
+        // if there is enough cheese to make a cheeseburger, signal the full cheese semaphore
+        if (cheese % 2 == 0)
         {
-            // reset the cheese mutex and empty cheese semaphore
-            sem_post(&mutex_cheese);
-            sem_post(&empty_cheese);
+            sem_post(&full_cheese);
         }
-        
-        
-        
     }
     // delete pointer
-    delete chargs;
+    delete cheese_args;
 }
 
 /********************************************************************
@@ -368,8 +331,8 @@ int main()
             if(total_cheeseburgers > 0)
             {
                 // if so, find the total amount of cheese and milk required
-                int total_cheese = 2 * total_cheeseburgers;
-                int total_milk = 3 * total_cheese;
+                int total_cheese = total_cheeseburgers;
+                int total_milk = 2 * total_cheese;
 
                 // initialize struct of runner function arguments with producer ids and total amount needed
                 thread_args args[5] = {{1, total_milk},{2, total_milk},{3, total_milk},{4, total_cheese},{5, total_cheese}};
@@ -393,7 +356,7 @@ int main()
                 // wait for 1 second
                 sleep(1);
 
-                // delete and reinitialize semaphores
+                /*/ delete and reinitialize semaphores
                 sem_destroy(&empty_milk);
                 sem_destroy(&empty_cheese);
                 sem_destroy(&mutex_milk);
@@ -406,7 +369,7 @@ int main()
                 sem_init(&mutex_milk, 0, 1);
                 sem_init(&mutex_cheese, 0, 1);
                 sem_init(&full_milk, 0, 0);
-                sem_init(&full_cheese, 0, 0);
+                sem_init(&full_cheese, 0, 0);*/
 
                 // reset milk and cheese buffers
                 buffer_milk.fill(0);
@@ -422,10 +385,6 @@ int main()
             {
                 cout << "Please enter a whole number greater than 0." << endl;
             }
-        }
-        else
-        {
-            cout << "Please enter a whole number greater than 0." << endl;
         }
     }
     // delete semaphores
